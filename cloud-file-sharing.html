@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lưu trữ và chia sẻ tệp tin với Amazon S3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f1; --card:#ffffff; --ink:#16282a; --muted:#5d7173; --line:#d3dcdb;
+  --accent:#0d6b6e; --accent-ink:#ffffff; --danger:#b42318; --ok:#177245; --code:#f3f6f5;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#101a1b; --card:#182426; --ink:#e4eeed; --muted:#93a8a9; --line:#2b3d3f;
+         --accent:#4fc3c6; --accent-ink:#062325; --danger:#ff8a80; --ok:#6fd49b; --code:#0f1b1c; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "Be Vietnam Pro",system-ui,"Segoe UI",sans-serif}
+header{padding:28px 24px 8px;max-width:1120px;margin:0 auto}
+h1{font-size:24px;line-height:1.25;margin:0 0 6px;font-weight:700}
+header p{margin:0;color:var(--muted);max-width:62ch}
+main{max-width:1120px;margin:0 auto;padding:16px 24px 48px;display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+h2{font-size:16px;margin:0 0 12px;font-weight:700}
+label{display:block;font-weight:500;margin-bottom:6px}
+input[type=text],input[type=file]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.field{margin-bottom:16px}
+button,.btn{font:inherit;font-weight:500;padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;text-decoration:none;display:inline-block}
+button.ghost,.btn.ghost{background:transparent;color:var(--accent)}
+button.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+button:disabled{opacity:.55;cursor:wait}
+.hint{color:var(--muted);font-size:13px;margin:6px 0 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.head h2{margin:0}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-weight:500;color:var(--muted);font-size:13px}
+td.name{word-break:break-all;font-weight:500}
+td.act{white-space:nowrap}
+td.act>*{margin-right:6px}
+td.act button,td.act a{padding:5px 10px;font-size:13px}
+.empty{padding:22px 8px;color:var(--muted)}
+.status{display:inline-block;padding:2px 9px;border-radius:99px;font-weight:700;font-size:13px;border:1px solid currentColor}
+.status.ok{color:var(--ok)} .status.bad{color:var(--danger)}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:12px;margin:10px 0 0;max-height:260px;overflow:auto;font:12.5px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.share{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.share input{margin:8px 0}
+.stack{display:grid;gap:20px}
+.busy{color:var(--muted);font-size:13px;margin-top:8px;min-height:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lưu trữ và chia sẻ tệp tin với Amazon S3</h1>
+  <p>Tải tệp lên bucket S3 qua backend Node.js chạy trên Render, xem danh sách, tải xuống, tạo link chia sẻ có thời hạn và xóa tệp.</p>
+</header>
+
+<main>
+  <div class="stack">
+    <section aria-labelledby="h-up">
+      <h2 id="h-up">Tải tệp lên</h2>
+      <div class="field">
+        <label for="api">Địa chỉ backend</label>
+        <input type="text" id="api" value="https://cloud-file-sharing-2iow.onrender.com" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="file">Chọn tệp</label>
+        <input type="file" id="file">
+        <p class="hint">Server chấp nhận .png, .jpg, .pdf, .txt, .docx và tối đa 10 MB. Trang này không kiểm tra trước, để bạn thử được các lỗi 415 và 413 từ server.</p>
+      </div>
+      <button id="btnUpload">Tải lên S3</button>
+      <div class="busy" id="busy" role="status"></div>
+    </section>
+
+    <section aria-labelledby="h-log">
+      <h2 id="h-log">Phản hồi từ server</h2>
+      <div id="statusLine"><span class="hint">Chưa có yêu cầu nào.</span></div>
+      <pre id="log">{}</pre>
+    </section>
+  </div>
+
+  <section aria-labelledby="h-list">
+    <div class="head">
+      <h2 id="h-list">Tệp trong bucket</h2>
+      <button class="ghost" id="btnRefresh">Làm mới danh sách</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tên tệp</th><th>Dung lượng</th><th>Cập nhật</th><th>Thao tác</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="4" class="empty">Bấm “Làm mới danh sách” để tải danh sách tệp.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="share" id="shareBox" hidden>
+      <strong>Link chia sẻ (hết hạn sau <span id="shareMin">15</span> phút)</strong>
+      <input type="text" id="shareUrl" readonly>
+      <div class="row">
+        <button id="btnCopy">Sao chép link</button>
+        <a class="btn ghost" id="btnOpen" target="_blank" rel="noopener">Mở link</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const base = () => $('api').value.trim().replace(/\/+$/, '');
+
+function busy(msg){ $('busy').textContent = msg || ''; }
+
+function show(status, data){
+  const ok = status >= 200 && status < 300;
+  $('statusLine').innerHTML = `<span class="status ${ok ? 'ok' : 'bad'}">${status || 'Lỗi mạng'}</span>`;
+  $('log').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+}
+
+async function call(path, options){
+  busy('Đang gọi server… lần đầu có thể mất khoảng 1 phút vì Render đang khởi động.');
+  try{
+    const res = await fetch(base() + path, options);
+    let data; const text = await res.text();
+    try{ data = JSON.parse(text); }catch(e){ data = text; }
+    show(res.status, data);
+    return { res, data };
+  }catch(err){
+    show(0, 'Không kết nối được tới server: ' + err.message);
+    return null;
+  }finally{
+    busy('');
+  }
+}
+
+function fmtSize(b){
+  if(b < 1024) return b + ' B';
+  if(b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(2) + ' MB';
+}
+
+function fmtDate(s){
+  return new Date(s).toLocaleString('vi-VN', { dateStyle:'short', timeStyle:'short' });
+}
+
+function esc(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadList(){
+  const r = await call('/api/files');
+  const tbody = $('rows');
+  if(!r || !r.data || !r.data.success){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">Không lấy được danh sách. Xem phản hồi ở khung bên trái.</td></tr>';
+    return;
+  }
+  if(!r.data.files.length){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">Bucket đang trống. Hãy tải một tệp lên.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  r.data.files.forEach(f => {
+    const tr = document.createElement('tr');
+    const dl = base() + '/api/download/' + encodeURIComponent(f.key);
+    tr.innerHTML = `
+      <td class="name">${esc(f.key)}</td>
+      <td>${fmtSize(f.size)}</td>
+      <td>${fmtDate(f.lastModified)}</td>
+      <td class="act">
+        <a class="btn ghost" href="${dl}">Tải xuống</a>
+        <button class="ghost" data-act="share">Chia sẻ</button>
+        <button class="danger" data-act="del">Xóa</button>
+      </td>`;
+    tr.querySelector('[data-act=share]').onclick = () => shareFile(f.key);
+    tr.querySelector('[data-act=del]').onclick = () => deleteFile(f.key);
+    tbody.appendChild(tr);
+  });
+}
+
+async function uploadFile(){
+  const f = $('file').files[0];
+  if(!f){ show(0, 'Chưa chọn tệp. Hãy chọn một tệp rồi bấm “Tải lên S3”.'); return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  $('btnUpload').disabled = true;
+  const r = await call('/api/upload', { method:'POST', body: fd });
+  $('btnUpload').disabled = false;
+  if(r && r.data && r.data.success){ $('file').value = ''; loadList(); }
+}
+
+async function shareFile(key){
+  const r = await call('/api/share/' + encodeURIComponent(key));
+  if(r && r.data && r.data.success){
+    $('shareUrl').value = r.data.url;
+    $('btnOpen').href = r.data.url;
+    $('shareMin').textContent = Math.round(r.data.expiresInSeconds / 60);
+    $('shareBox').hidden = false;
+    $('shareBox').scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+}
+
+async function deleteFile(key){
+  if(!confirm('Xóa tệp "' + key + '" khỏi S3? Thao tác này không hoàn tác được.')) return;
+  const r = await call('/api/delete/' + encodeURIComponent(key), { method:'DELETE' });
+  if(r && r.data && r.data.success){ $('shareBox').hidden = true; loadList(); }
+}
+
+$('btnUpload').onclick = uploadFile;
+$('btnRefresh').onclick = loadList;
+$('btnCopy').onclick = async () => {
+  try{
+    await navigator.clipboard.writeText($('shareUrl').value);
+    $('btnCopy').textContent = 'Đã sao chép';
+  }catch(e){
+    $('shareUrl').select();
+    $('btnCopy').textContent = 'Hãy nhấn Ctrl + C';
+  }
+  setTimeout(() => $('btnCopy').textContent = 'Sao chép link', 2000);
+};
+</script>
+</body>
+</html>
