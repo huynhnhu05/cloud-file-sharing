@@ -135,17 +135,14 @@ async function call(path, options){
     busy('');
   }
 }
-
 function fmtSize(b){
   if(b < 1024) return b + ' B';
   if(b < 1048576) return (b/1024).toFixed(1) + ' KB';
   return (b/1048576).toFixed(2) + ' MB';
 }
-
 function fmtDate(s){
   return new Date(s).toLocaleString('vi-VN', { dateStyle:'short', timeStyle:'short' });
 }
-
 function esc(s){
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
