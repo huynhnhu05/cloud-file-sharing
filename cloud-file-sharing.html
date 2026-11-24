@@ -179,9 +179,8 @@ async function loadList(){
 //TẢI LÊN
 async function uploadFile(){
   const f = $('file').files[0];
-  if(!f){ show(0, 'Chưa chọn tệp. Hãy chọn một tệp rồi bấm “Tải lên S3”.'); return; }
   const fd = new FormData();
-  fd.append('file', f);
+  if(f) fd.append('file', f);
   $('btnUpload').disabled = true;
   const r = await call('/api/upload', { method:'POST', body: fd });
   $('btnUpload').disabled = false;
