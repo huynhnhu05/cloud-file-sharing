@@ -72,7 +72,7 @@ pre{background:var(--code);border:1px solid var(--line);border-radius:6px;paddin
       <div class="field">
         <label for="file">Chọn tệp</label>
         <input type="file" id="file">
-        <p class="hint">Server chấp nhận .png, .jpg, .pdf, .txt, .docx và tối đa 10 MB. Trang này không kiểm tra trước, để bạn thử được các lỗi 415 và 413 từ server.</p>
+        <p class="hint">Server chấp nhận .png, .jpg, .pdf, .txt, .docx và tối đa 10 MB.</p>
       </div>
       <button id="btnUpload">Tải lên S3</button>
       <div class="busy" id="busy" role="status"></div>
@@ -146,7 +146,7 @@ function fmtDate(s){
 function esc(s){
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
+//DANH SÁCH
 async function loadList(){
   const r = await call('/api/files');
   const tbody = $('rows');
@@ -161,7 +161,7 @@ async function loadList(){
   tbody.innerHTML = '';
   r.data.files.forEach(f => {
     const tr = document.createElement('tr');
-    const dl = base() + '/api/download/' + encodeURIComponent(f.key);
+    const dl = base() + '/api/download/' + encodeURIComponent(f.key);//request GET.
     tr.innerHTML = `
       <td class="name">${esc(f.key)}</td>
       <td>${fmtSize(f.size)}</td>
@@ -176,7 +176,7 @@ async function loadList(){
     tbody.appendChild(tr);
   });
 }
-
+//TẢI LÊN
 async function uploadFile(){
   const f = $('file').files[0];
   if(!f){ show(0, 'Chưa chọn tệp. Hãy chọn một tệp rồi bấm “Tải lên S3”.'); return; }
@@ -187,9 +187,9 @@ async function uploadFile(){
   $('btnUpload').disabled = false;
   if(r && r.data && r.data.success){ $('file').value = ''; loadList(); }
 }
-
+//CHIA SẺ
 async function shareFile(key){
-  const r = await call('/api/share/' + encodeURIComponent(key));
+  const r = await call('/api/share/' + encodeURIComponent(key)); //request GET.
   if(r && r.data && r.data.success){
     $('shareUrl').value = r.data.url;
     $('btnOpen').href = r.data.url;
@@ -198,7 +198,7 @@ async function shareFile(key){
     $('shareBox').scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
 }
-
+//XÓA
 async function deleteFile(key){
   if(!confirm('Xóa tệp "' + key + '" khỏi S3? Thao tác này không hoàn tác được.')) return;
   const r = await call('/api/delete/' + encodeURIComponent(key), { method:'DELETE' });
